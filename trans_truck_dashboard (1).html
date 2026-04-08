@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trans Truck — Panel de Flota</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#f4f4f0;color:#222;font-size:15px}
+  .topbar{background:#1a2e4a;color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .topbar-title{font-size:18px;font-weight:600;letter-spacing:.02em}
+  .topbar-sub{font-size:12px;opacity:.7;margin-top:2px}
+  .nav-tabs{display:flex;gap:4px}
+  .nav-tab{padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+  .nav-tab.op{background:#2563a8;color:#fff}
+  .nav-tab.op.active{background:#fff;color:#1a2e4a}
+  .nav-tab.ger{background:#166534;color:#fff}
+  .nav-tab.ger.active{background:#fff;color:#166534}
+  .sync-bar{background:#fff;border-bottom:1px solid #e0e0d8;padding:8px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .sync-btn{padding:6px 16px;background:#1a2e4a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500}
+  .sync-btn:hover{background:#2563a8}
+  .sync-status{font-size:12px;color:#666}
+  .mes-sel{padding:5px 10px;border:1px solid #ccc;border-radius:6px;font-size:12px}
+  .section{display:none;padding:20px 24px}
+  .section.active{display:block}
+  .section-title{font-size:16px;font-weight:600;margin-bottom:16px;color:#1a2e4a;border-left:4px solid #2563a8;padding-left:10px;border-radius:0}
+  .section-title.green{border-color:#16a34a;color:#166534}
+  .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+  .metric{background:#fff;border-radius:10px;padding:14px 16px;border:1px solid #e8e8e0}
+  .metric-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .metric-value{font-size:22px;font-weight:700;color:#1a2e4a}
+  .metric-value.green{color:#16a34a}
+  .metric-value.amber{color:#b45309}
+  .metric-value.red{color:#dc2626}
+  .metric-sub{font-size:11px;color:#aaa;margin-top:3px}
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+  .card{background:#fff;border-radius:10px;padding:16px;border:1px solid #e8e8e0}
+  .card-title{font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:right;padding:7px 10px;background:#f8f8f4;color:#666;font-weight:600;font-size:11px;border-bottom:1px solid #e8e8e0}
+  th:first-child{text-align:left}
+  td{text-align:right;padding:7px 10px;border-bottom:1px solid #f0f0e8;color:#333}
+  td:first-child{text-align:left;font-weight:500;color:#1a2e4a}
+  tr:last-child td{border-bottom:none;background:#f8f8f4;font-weight:700}
+  .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+  .badge-green{background:#dcfce7;color:#166534}
+  .badge-red{background:#fee2e2;color:#991b1b}
+  .badge-amber{background:#fef3c7;color:#92400e}
+  .pct-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .pct-label{width:120px;font-size:12px;color:#555;flex-shrink:0}
+  .pct-bg{flex:1;height:8px;background:#f0f0e8;border-radius:4px;overflow:hidden}
+  .pct-fill{height:100%;border-radius:4px}
+  .pct-val{width:44px;text-align:right;font-size:12px;font-weight:600;color:#333}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;font-size:11px;color:#666}
+  .legend span{display:flex;align-items:center;gap:4px}
+  .leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+  .loading{text-align:center;padding:40px;color:#888;font-size:14px}
+  .error-msg{background:#fee2e2;color:#991b1b;padding:12px 16px;border-radius:8px;font-size:13px;margin:12px 0}
+  .viajes-table td:first-child{font-size:11px;color:#555;font-weight:400}
+  @media(max-width:640px){.charts-row{grid-template-columns:1fr}.nav-tab{padding:7px 12px;font-size:12px}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Trans Truck — Panel de Flota</div>
+    <div class="topbar-sub" id="topbar-fecha">Cargando datos...</div>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab op active" onclick="setTab('op')">Operativo</button>
+    <button class="nav-tab ger" onclick="setTab('ger')">Gerencial</button>
+  </div>
+</div>
+
+<div class="sync-bar">
+  <button class="sync-btn" onclick="cargarTodo()">Actualizar datos</button>
+  <select class="mes-sel" id="mesSelect" onchange="renderAll()">
+    <option value="">Cargando...</option>
+  </select>
+  <span class="sync-status" id="syncStatus">Conectando con Google Drive...</span>
+</div>
+
+<div id="tab-op" class="section active">
+  <div id="op-content"><div class="loading">Cargando datos operativos...</div></div>
+</div>
+
+<div id="tab-ger" class="section">
+  <div id="ger-content"><div class="loading">Cargando datos gerenciales...</div></div>
+</div>
+
+<script>
+const FILE_IDS = {
+  movimientos: '1YpvPdyZm-TGI1LQm3pBanZasQHo7reJT',
+  combustible: '1EQOwTiwMxmRb40KjDdD9aESsv8mjOvOt',
+  costos:      '1cPzKRqdMJeFhD0SLKwjc9B3-LPhiWDvN',
+  reportes:    '11eFsCczQxUWMtiYoJfxDOqk75vtMWyaj'
+};
+
+let DATA = { mov: [], comb: [], costos: [], reportes: [] };
+let meses = [];
+let charts = {};
+
+function gdUrl(id){ return `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`; }
+
+async function fetchExcel(id){
+  const res = await fetch(gdUrl(id));
+  if(!res.ok) throw new Error(`Error al cargar archivo (${res.status})`);
+  const buf = await res.arrayBuffer();
+  return XLSX.read(buf, {type:'array', cellDates:true});
+}
+
+function sheetToArr(wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  if(!ws) return [];
+  return XLSX.utils.sheet_to_json(ws, {defval:''});
+}
+
+function setStatus(msg){ document.getElementById('syncStatus').textContent = msg; }
+
+async function cargarTodo(){
+  setStatus('Conectando con Google Drive...');
+  try {
+    setStatus('Cargando movimientos...');
+    const wbMov = await fetchExcel(FILE_IDS.movimientos);
+    DATA.mov = sheetToArr(wbMov, 'Movimientos');
+
+    setStatus('Cargando combustible...');
+    const wbComb = await fetchExcel(FILE_IDS.combustible);
+    DATA.comb = sheetToArr(wbComb, 'CARGA COMBUSTIBLE');
+
+    setStatus('Cargando costos...');
+    const wbCos = await fetchExcel(FILE_IDS.costos);
+    DATA.costosFijos = sheetToArr(wbCos, 'Costos Fijos..');
+    DATA.costosVar = sheetToArr(wbCos, 'Gastos Mantenimiento');
+
+    setStatus('Cargando reportes...');
+    const wbRep = await fetchExcel(FILE_IDS.reportes);
+    DATA.reportes = sheetToArr(wbRep, 'BASE');
+
+    procesarMeses();
+    renderAll();
+    const ahora = new Date();
+    setStatus(`Actualizado: ${ahora.toLocaleDateString('es-AR')} ${ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`);
+    document.getElementById('topbar-fecha').textContent = `Datos al ${ahora.toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'})}`;
+  } catch(e) {
+    setStatus('Error al cargar. Verificar permisos de Drive.');
+    console.error(e);
+  }
+}
+
+function mesStr(d){
+  if(!d) return '';
+  if(typeof d === 'string') return d.substring(0,7);
+  if(d instanceof Date) return d.toISOString().substring(0,7);
+  return String(d).substring(0,7);
+}
+
+function procesarMeses(){
+  const set = new Set();
+  DATA.reportes.forEach(r=>{ const m = mesStr(r.Mes); if(m) set.add(m); });
+  DATA.mov.forEach(r=>{ const m = mesStr(r['Mes']); if(m) set.add(m); });
+  meses = [...set].filter(m=>m.match(/^\d{4}-\d{2}$/)).sort();
+  const sel = document.getElementById('mesSelect');
+  sel.innerHTML = meses.map(m=>`<option value="${m}">${fmtMes(m)}</option>`).join('');
+  if(meses.length) sel.value = meses[meses.length-1];
+}
+
+function fmtMes(m){
+  const [y,mo] = m.split('-');
+  const nombres = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${nombres[parseInt(mo)]} ${y}`;
+}
+
+function getMesActivo(){ return document.getElementById('mesSelect').value; }
+
+function fmtM(v){ return '$'+(v/1000000).toFixed(1)+'M'; }
+function fmtN(v){ return Math.round(v).toLocaleString('es-AR'); }
+function fmtPct(v){ return (v*100).toFixed(1)+'%'; }
+
+const CAMION_COLORS = {
+  'AE817YC':'#185FA5','AE817YN':'#1D9E75','AG726GZ':'#D85A30','OAN502':'#854F0B','AG213SH':'#5F5E5A'
+};
+
+function setTab(t){
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.nav-tab.${t}`).classList.add('active');
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(`tab-${t}`).classList.add('active');
+}
+
+function renderAll(){
+  renderOperativo();
+  renderGerencial();
+}
+
+function destroyChart(id){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+}
+
+function renderOperativo(){
+  const mes = getMesActivo();
+  const mov = DATA.mov.filter(r => mesStr(r['Mes'])===mes || mesStr(r['Fecha '])===mes);
+  const comb = DATA.comb.filter(r => {
+    const m = r.Mes ? String(r.Mes).padStart(2,'0') : '';
+    const y = mes.substring(0,4);
+    const mo = mes.substring(5,7);
+    return m === mo || mesStr(r.Fecha)===mes;
+  });
+
+  const camiones = ['AE817YC','AE817YN','AG726GZ','OAN502'];
+  const stats = {};
+  camiones.forEach(c=>{ stats[c]={viajes:0,kg:0,km:0,litros:0,lt100:[], chofer:''}; });
+
+  mov.forEach(r=>{
+    const cam = String(r.Camion||'').trim();
+    if(!stats[cam]) return;
+    stats[cam].viajes++;
+    const kg = parseFloat(r['Neto ']||r['Neto']||0);
+    stats[cam].kg += kg>1000?kg:kg*1000;
+    const km = parseFloat(r['Km asfalto']||0);
+    stats[cam].km += km;
+    if(r.Chofer) stats[cam].chofer = String(r.Chofer).trim().split(' ')[0];
+  });
+
+  comb.forEach(r=>{
+    const cam = String(r.Camion||'').trim();
+    if(!stats[cam]) return;
+    const lt = parseFloat(r.LT||0);
+    stats[cam].litros += lt;
+    const lt100 = parseFloat(r['Lt/100']||0);
+    if(lt100>0) stats[cam].lt100.push(lt100);
+  });
+
+  const totViajes = camiones.reduce((a,c)=>a+stats[c].viajes,0);
+  const totKg = camiones.reduce((a,c)=>a+stats[c].kg,0);
+  const totLt = camiones.reduce((a,c)=>a+stats[c].litros,0);
+  const totKm = camiones.reduce((a,c)=>a+stats[c].km,0);
+
+  let html = `
+  <div class="section-title">Movimiento operativo — ${fmtMes(mes)}</div>
+  <div class="metrics-grid">
+    <div class="metric"><div class="metric-label">Viajes del mes</div><div class="metric-value">${totViajes}</div></div>
+    <div class="metric"><div class="metric-label">Tn transportadas</div><div class="metric-value">${(totKg/1000).toFixed(0)}</div><div class="metric-sub">toneladas</div></div>
+    <div class="metric"><div class="metric-label">Km recorridos</div><div class="metric-value">${fmtN(totKm)}</div></div>
+    <div class="metric"><div class="metric-label">Litros cargados</div><div class="metric-value">${fmtN(totLt)}</div></div>
+    <div class="metric"><div class="metric-label">Camiones activos</div><div class="metric-value">${camiones.filter(c=>stats[c].viajes>0).length}</div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">Viajes y Tn por camión</div>
+      <div class="legend">
+        ${camiones.map(c=>`<span><span class="leg-dot" style="background:${CAMION_COLORS[c]}"></span>${c}</span>`).join('')}
+      </div>
+      <div style="position:relative;height:220px"><canvas id="chartViajes" role="img" aria-label="Viajes y toneladas por camión"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Consumo Lt/100km por camión</div>
+      <div style="position:relative;height:220px"><canvas id="chartConsumo" role="img" aria-label="Consumo de combustible por camión"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">Detalle por camión</div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Camión</th><th>Chofer</th><th>Viajes</th><th>Tn</th><th>Km</th><th>Litros</th><th>Lt/100km prom</th>
+      </tr></thead>
+      <tbody>
+      ${camiones.map(c=>{
+        const s = stats[c];
+        const lt100prom = s.lt100.length ? (s.lt100.reduce((a,b)=>a+b,0)/s.lt100.length).toFixed(1) : '-';
+        const tn = (s.kg/1000).toFixed(1);
+        const activo = s.viajes>0;
+        return `<tr>
+          <td>${c}</td>
+          <td>${s.chofer||'-'}</td>
+          <td>${s.viajes}</td>
+          <td>${tn}</td>
+          <td>${fmtN(s.km)}</td>
+          <td>${fmtN(s.litros)}</td>
+          <td>${lt100prom}</td>
+        </tr>`;
+      }).join('')}
+      <tr><td>Total</td><td>-</td><td>${totViajes}</td><td>${(totKg/1000).toFixed(1)}</td><td>${fmtN(totKm)}</td><td>${fmtN(totLt)}</td><td>-</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Mercaderías transportadas</div>
+    <div class="charts-row" style="margin-bottom:0">
+      <div style="position:relative;height:240px"><canvas id="chartMerc" role="img" aria-label="Distribución por tipo de mercadería"></canvas></div>
+      <div id="mercTable"></div>
+    </div>
+  </div>`;
+
+  document.getElementById('op-content').innerHTML = html;
+
+  destroyChart('chartViajes');
+  destroyChart('chartConsumo');
+  destroyChart('chartMerc');
+
+  charts['chartViajes'] = new Chart(document.getElementById('chartViajes'),{
+    type:'bar',
+    data:{
+      labels:camiones,
+      datasets:[
+        {label:'Viajes',data:camiones.map(c=>stats[c].viajes),backgroundColor:camiones.map(c=>CAMION_COLORS[c]),yAxisID:'y'},
+        {label:'Tn',data:camiones.map(c=>+(stats[c].kg/1000).toFixed(1)),backgroundColor:camiones.map(c=>CAMION_COLORS[c]+'44'),yAxisID:'y1',type:'bar'}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{
+        y:{position:'left',ticks:{font:{size:10}},grid:{display:false},title:{display:true,text:'Viajes',font:{size:10}}},
+        y1:{position:'right',ticks:{font:{size:10}},grid:{display:false},title:{display:true,text:'Tn',font:{size:10}}}
+      }
+    }
+  });
+
+  const lt100data = camiones.map(c=>{ const s=stats[c]; return s.lt100.length?(s.lt100.reduce((a,b)=>a+b,0)/s.lt100.length).toFixed(1):0; });
+  charts['chartConsumo'] = new Chart(document.getElementById('chartConsumo'),{
+    type:'bar',
+    data:{labels:camiones,datasets:[{label:'Lt/100km',data:lt100data,backgroundColor:camiones.map(c=>CAMION_COLORS[c]),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}},y:{ticks:{font:{size:11}},grid:{display:false}}}
+    }
+  });
+
+  const mercMap = {};
+  mov.forEach(r=>{
+    const merc = String(r.Mercaderia||'Sin datos').trim();
+    if(!mercMap[merc]) mercMap[merc]=0;
+    const kg = parseFloat(r['Neto ']||r['Neto']||0);
+    mercMap[merc]+= kg>1000?kg:kg*1000;
+  });
+  const mercEntries = Object.entries(mercMap).sort((a,b)=>b[1]-a[1]);
+  const mercColors = ['#185FA5','#1D9E75','#D85A30','#854F0B','#7F77DD','#888780'];
+  charts['chartMerc'] = new Chart(document.getElementById('chartMerc'),{
+    type:'doughnut',
+    data:{labels:mercEntries.map(e=>e[0]),datasets:[{data:mercEntries.map(e=>+(e[1]/1000).toFixed(1)),backgroundColor:mercColors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}
+  });
+
+  const mercTot = mercEntries.reduce((a,e)=>a+e[1],0);
+  document.getElementById('mercTable').innerHTML = `
+    <div style="font-size:12px;color:#666;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Distribución</div>
+    ${mercEntries.map((e,i)=>`
+      <div class="pct-bar-row">
+        <span class="pct-label">${e[0]}</span>
+        <div class="pct-bg"><div class="pct-fill" style="width:${mercTot>0?(e[1]/mercTot*100).toFixed(0):0}%;background:${mercColors[i]||'#888'}"></div></div>
+        <span class="pct-val">${(e[1]/1000).toFixed(0)} Tn</span>
+      </div>`).join('')}`;
+}
+
+function renderGerencial(){
+  const mes = getMesActivo();
+  const base = DATA.reportes.filter(r=>mesStr(r.Mes)===mes);
+  const camiones = ['AE817YC','AE817YN','AG726GZ','OAN502'];
+
+  if(!base.length){
+    document.getElementById('ger-content').innerHTML = `<div class="error-msg">No hay datos de reportes para ${fmtMes(mes)}. Verificá que la planilla REPORTES tenga datos para este mes.</div>`;
+    return;
+  }
+
+  const totFact = base.reduce((a,r)=>a+(parseFloat(r.Facturacion_Bruta_$)||0),0);
+  const totCosto = base.reduce((a,r)=>a+(parseFloat(r.Costo_Total_$)||0),0);
+  const totMargen = base.reduce((a,r)=>a+(parseFloat(r.Margen_$)||0),0);
+  const pctMargen = totFact>0 ? totMargen/totFact : 0;
+  const totViajes = base.reduce((a,r)=>a+(parseFloat(r.Viajes)||0),0);
+
+  const historico = [];
+  const mesesHist = meses.filter(m=>m<=mes).slice(-6);
+  mesesHist.forEach(m=>{
+    const rows = DATA.reportes.filter(r=>mesStr(r.Mes)===m);
+    if(rows.length){
+      historico.push({
+        mes:m,
+        fact: rows.reduce((a,r)=>a+(parseFloat(r.Facturacion_Bruta_$)||0),0),
+        costo: rows.reduce((a,r)=>a+(parseFloat(r.Costo_Total_$)||0),0),
+        margen: rows.reduce((a,r)=>a+(parseFloat(r.Margen_$)||0),0),
+      });
+    }
+  });
+
+  let html = `
+  <div class="section-title green">Resumen gerencial — ${fmtMes(mes)}</div>
+  <div class="metrics-grid">
+    <div class="metric"><div class="metric-label">Facturación bruta</div><div class="metric-value">${fmtM(totFact)}</div></div>
+    <div class="metric"><div class="metric-label">Costo total</div><div class="metric-value amber">${fmtM(totCosto)}</div></div>
+    <div class="metric"><div class="metric-label">Margen</div><div class="metric-value green">${fmtM(totMargen)}</div><div class="metric-sub">${fmtPct(pctMargen)} del total</div></div>
+    <div class="metric"><div class="metric-label">Viajes facturados</div><div class="metric-value">${fmtN(totViajes)}</div></div>
+    <div class="metric"><div class="metric-label">Ingreso x km prom</div><div class="metric-value">${base.length?'$'+Math.round(base.reduce((a,r)=>a+(parseFloat(r.Ingreso_km)||0),0)/base.length).toLocaleString('es-AR'):'-'}</div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">Facturación vs costo — últimos 6 meses</div>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:#185FA5"></span>Facturación</span>
+        <span><span class="leg-dot" style="background:#D85A30"></span>Costo</span>
+        <span><span class="leg-dot" style="background:#1D9E75"></span>Margen</span>
+      </div>
+      <div style="position:relative;height:220px"><canvas id="chartHist" role="img" aria-label="Histórico facturación costo margen"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">% Margen por mes</div>
+      <div style="position:relative;height:220px"><canvas id="chartPctMargen" role="img" aria-label="Porcentaje de margen por mes"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">Rentabilidad por camión — ${fmtMes(mes)}</div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Camión</th><th>Facturación</th><th>Costo total</th><th>Margen $</th><th>% Margen</th><th>Costo/km</th><th>Ing/km</th><th>Viajes</th>
+      </tr></thead>
+      <tbody>
+      ${base.filter(r=>parseFloat(r.Facturacion_Bruta_$)>0).map(r=>{
+        const fact = parseFloat(r.Facturacion_Bruta_$)||0;
+        const costo = parseFloat(r.Costo_Total_$)||0;
+        const margen = parseFloat(r.Margen_$)||0;
+        const pct = fact>0?margen/fact:0;
+        const costkm = parseFloat(r['Costo_total/km'])||0;
+        const ingkm = parseFloat(r.Ingreso_km)||0;
+        const cls = pct>=0.45?'badge-green':pct>=0.3?'badge-amber':'badge-red';
+        return `<tr>
+          <td>${r.Camion}</td>
+          <td>${fmtM(fact)}</td>
+          <td>${fmtM(costo)}</td>
+          <td style="color:${margen>0?'#16a34a':'#dc2626'}">${fmtM(margen)}</td>
+          <td><span class="badge ${cls}">${fmtPct(pct)}</span></td>
+          <td>$${fmtN(costkm)}</td>
+          <td>$${fmtN(ingkm)}</td>
+          <td>${r.Viajes||0}</td>
+        </tr>`;
+      }).join('')}
+      <tr><td>Total</td><td>${fmtM(totFact)}</td><td>${fmtM(totCosto)}</td><td>${fmtM(totMargen)}</td><td>${fmtPct(pctMargen)}</td><td>-</td><td>-</td><td>${fmtN(totViajes)}</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-title">Costo/km por camión</div>
+      <div style="position:relative;height:200px"><canvas id="chartCostKm" role="img" aria-label="Costo por km por camión"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Margen por camión</div>
+      <div style="position:relative;height:200px"><canvas id="chartMargenCam" role="img" aria-label="Margen por camión"></canvas></div>
+    </div>
+  </div>`;
+
+  document.getElementById('ger-content').innerHTML = html;
+
+  destroyChart('chartHist');
+  destroyChart('chartPctMargen');
+  destroyChart('chartCostKm');
+  destroyChart('chartMargenCam');
+
+  charts['chartHist'] = new Chart(document.getElementById('chartHist'),{
+    type:'bar',
+    data:{
+      labels:historico.map(h=>fmtMes(h.mes).substring(0,3)+' '+h.mes.substring(2,4)),
+      datasets:[
+        {label:'Facturación',data:historico.map(h=>+(h.fact/1e6).toFixed(2)),backgroundColor:'#B5D4F4',borderColor:'#185FA5',borderWidth:1},
+        {label:'Costo',data:historico.map(h=>+(h.costo/1e6).toFixed(2)),backgroundColor:'#F5C4B3',borderColor:'#D85A30',borderWidth:1},
+        {label:'Margen',data:historico.map(h=>+(h.margen/1e6).toFixed(2)),backgroundColor:'#9FE1CB',borderColor:'#1D9E75',borderWidth:1},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{autoSkip:false,font:{size:10}},grid:{display:false}},
+        y:{ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}
+      }
+    }
+  });
+
+  charts['chartPctMargen'] = new Chart(document.getElementById('chartPctMargen'),{
+    type:'line',
+    data:{
+      labels:historico.map(h=>fmtMes(h.mes).substring(0,3)+' '+h.mes.substring(2,4)),
+      datasets:[{label:'% Margen',data:historico.map(h=>h.fact>0?+(h.margen/h.fact*100).toFixed(1):0),
+        borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',borderWidth:2,
+        pointRadius:4,pointBackgroundColor:'#1D9E75',fill:true,tension:0.3}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{autoSkip:false,font:{size:10}},grid:{display:false}},
+        y:{ticks:{callback:v=>v+'%',font:{size:10}},min:0,max:70,grid:{color:'rgba(0,0,0,0.05)'}}
+      }
+    }
+  });
+
+  const baseFilt = base.filter(r=>parseFloat(r.Facturacion_Bruta_$)>0);
+  charts['chartCostKm'] = new Chart(document.getElementById('chartCostKm'),{
+    type:'bar',
+    data:{labels:baseFilt.map(r=>r.Camion),datasets:[{label:'$/km',data:baseFilt.map(r=>Math.round(parseFloat(r['Costo_total/km'])||0)),
+      backgroundColor:baseFilt.map(r=>CAMION_COLORS[r.Camion]||'#888'),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{callback:v=>'$'+v.toLocaleString('es-AR'),font:{size:10}}},y:{ticks:{font:{size:11}},grid:{display:false}}}
+    }
+  });
+
+  charts['chartMargenCam'] = new Chart(document.getElementById('chartMargenCam'),{
+    type:'bar',
+    data:{labels:baseFilt.map(r=>r.Camion),datasets:[{label:'Margen $M',data:baseFilt.map(r=>+((parseFloat(r.Margen_$)||0)/1e6).toFixed(2)),
+      backgroundColor:baseFilt.map(r=>CAMION_COLORS[r.Camion]||'#888'),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:10}},grid:{display:false}},
+        y:{ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}
+      }
+    }
+  });
+}
+
+cargarTodo();
+</script>
+</body>
+</html>
